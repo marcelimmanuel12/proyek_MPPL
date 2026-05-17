@@ -47,7 +47,7 @@ function Onboarding() {
         allergies: f.allergies,
       }).eq("id", user.id);
       await supabase.from("initial_questionnaire").insert({ user_id: user.id, responses: f });
-      const { data: ai } = await analyze({ data: { profile: f, responses: f } });
+      const ai = await analyze({ data: { profile: f, responses: f } });
       setResult(ai.analysis);
       toast.success("Profil tersimpan");
     } catch (err) {
