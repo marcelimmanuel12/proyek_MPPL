@@ -14,7 +14,403 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      ai_consultations: {
+        Row: {
+          ai_response: string
+          created_at: string
+          id: string
+          type: string
+          user_id: string
+          user_input: string
+        }
+        Insert: {
+          ai_response: string
+          created_at?: string
+          id?: string
+          type: string
+          user_id: string
+          user_input: string
+        }
+        Update: {
+          ai_response?: string
+          created_at?: string
+          id?: string
+          type?: string
+          user_id?: string
+          user_input?: string
+        }
+        Relationships: []
+      }
+      challenges: {
+        Row: {
+          category: string | null
+          created_at: string
+          description: string | null
+          duration_days: number | null
+          icon: string | null
+          id: string
+          title: string
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string
+          description?: string | null
+          duration_days?: number | null
+          icon?: string | null
+          id?: string
+          title: string
+        }
+        Update: {
+          category?: string | null
+          created_at?: string
+          description?: string | null
+          duration_days?: number | null
+          icon?: string | null
+          id?: string
+          title?: string
+        }
+        Relationships: []
+      }
+      checkups: {
+        Row: {
+          checkup_date: string
+          created_at: string
+          diagnosis: string | null
+          doctor: string | null
+          hospital: string | null
+          id: string
+          notes: string | null
+          user_id: string
+        }
+        Insert: {
+          checkup_date: string
+          created_at?: string
+          diagnosis?: string | null
+          doctor?: string | null
+          hospital?: string | null
+          id?: string
+          notes?: string | null
+          user_id: string
+        }
+        Update: {
+          checkup_date?: string
+          created_at?: string
+          diagnosis?: string | null
+          doctor?: string | null
+          hospital?: string | null
+          id?: string
+          notes?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      forum_comments: {
+        Row: {
+          author_name: string | null
+          content: string
+          created_at: string
+          id: string
+          post_id: string
+          user_id: string
+        }
+        Insert: {
+          author_name?: string | null
+          content: string
+          created_at?: string
+          id?: string
+          post_id: string
+          user_id: string
+        }
+        Update: {
+          author_name?: string | null
+          content?: string
+          created_at?: string
+          id?: string
+          post_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "forum_comments_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "forum_posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      forum_posts: {
+        Row: {
+          author_name: string | null
+          category: string | null
+          content: string
+          created_at: string
+          id: string
+          title: string
+          user_id: string
+        }
+        Insert: {
+          author_name?: string | null
+          category?: string | null
+          content: string
+          created_at?: string
+          id?: string
+          title: string
+          user_id: string
+        }
+        Update: {
+          author_name?: string | null
+          category?: string | null
+          content?: string
+          created_at?: string
+          id?: string
+          title?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      initial_questionnaire: {
+        Row: {
+          ai_analysis: string | null
+          created_at: string
+          id: string
+          responses: Json
+          user_id: string
+        }
+        Insert: {
+          ai_analysis?: string | null
+          created_at?: string
+          id?: string
+          responses: Json
+          user_id: string
+        }
+        Update: {
+          ai_analysis?: string | null
+          created_at?: string
+          id?: string
+          responses?: Json
+          user_id?: string
+        }
+        Relationships: []
+      }
+      medications: {
+        Row: {
+          active: boolean
+          created_at: string
+          dosage: string | null
+          id: string
+          name: string
+          notes: string | null
+          schedule_times: string[] | null
+          times_per_day: number | null
+          user_id: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          dosage?: string | null
+          id?: string
+          name: string
+          notes?: string | null
+          schedule_times?: string[] | null
+          times_per_day?: number | null
+          user_id: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          dosage?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+          schedule_times?: string[] | null
+          times_per_day?: number | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      monitoring_logs: {
+        Row: {
+          ai_feedback: string | null
+          ate_breakfast: boolean | null
+          ate_dinner: boolean | null
+          ate_lunch: boolean | null
+          created_at: string
+          exercised: boolean | null
+          id: string
+          mood: string | null
+          notes: string | null
+          sleep_hours: number | null
+          symptoms: string | null
+          user_id: string
+          water_glasses: number | null
+        }
+        Insert: {
+          ai_feedback?: string | null
+          ate_breakfast?: boolean | null
+          ate_dinner?: boolean | null
+          ate_lunch?: boolean | null
+          created_at?: string
+          exercised?: boolean | null
+          id?: string
+          mood?: string | null
+          notes?: string | null
+          sleep_hours?: number | null
+          symptoms?: string | null
+          user_id: string
+          water_glasses?: number | null
+        }
+        Update: {
+          ai_feedback?: string | null
+          ate_breakfast?: boolean | null
+          ate_dinner?: boolean | null
+          ate_lunch?: boolean | null
+          created_at?: string
+          exercised?: boolean | null
+          id?: string
+          mood?: string | null
+          notes?: string | null
+          sleep_hours?: number | null
+          symptoms?: string | null
+          user_id?: string
+          water_glasses?: number | null
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          age: number | null
+          ai_initial_analysis: string | null
+          allergies: string | null
+          avatar_mood: string | null
+          blood_type: string | null
+          chronic_conditions: string | null
+          created_at: string
+          current_medications: string | null
+          email: string | null
+          emergency_contact: string | null
+          full_name: string | null
+          gender: string | null
+          height_cm: number | null
+          id: string
+          onboarded: boolean
+          updated_at: string
+          weight_kg: number | null
+        }
+        Insert: {
+          age?: number | null
+          ai_initial_analysis?: string | null
+          allergies?: string | null
+          avatar_mood?: string | null
+          blood_type?: string | null
+          chronic_conditions?: string | null
+          created_at?: string
+          current_medications?: string | null
+          email?: string | null
+          emergency_contact?: string | null
+          full_name?: string | null
+          gender?: string | null
+          height_cm?: number | null
+          id: string
+          onboarded?: boolean
+          updated_at?: string
+          weight_kg?: number | null
+        }
+        Update: {
+          age?: number | null
+          ai_initial_analysis?: string | null
+          allergies?: string | null
+          avatar_mood?: string | null
+          blood_type?: string | null
+          chronic_conditions?: string | null
+          created_at?: string
+          current_medications?: string | null
+          email?: string | null
+          emergency_contact?: string | null
+          full_name?: string | null
+          gender?: string | null
+          height_cm?: number | null
+          id?: string
+          onboarded?: boolean
+          updated_at?: string
+          weight_kg?: number | null
+        }
+        Relationships: []
+      }
+      reminders: {
+        Row: {
+          active: boolean
+          created_at: string
+          id: string
+          notes: string | null
+          recurring: string | null
+          reminder_date: string | null
+          reminder_time: string | null
+          title: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          notes?: string | null
+          recurring?: string | null
+          reminder_date?: string | null
+          reminder_time?: string | null
+          title: string
+          type: string
+          user_id: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          notes?: string | null
+          recurring?: string | null
+          reminder_date?: string | null
+          reminder_time?: string | null
+          title?: string
+          type?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_challenges: {
+        Row: {
+          challenge_id: string
+          completed: boolean | null
+          id: string
+          progress_days: number | null
+          started_at: string
+          user_id: string
+        }
+        Insert: {
+          challenge_id: string
+          completed?: boolean | null
+          id?: string
+          progress_days?: number | null
+          started_at?: string
+          user_id: string
+        }
+        Update: {
+          challenge_id?: string
+          completed?: boolean | null
+          id?: string
+          progress_days?: number | null
+          started_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_challenges_challenge_id_fkey"
+            columns: ["challenge_id"]
+            isOneToOne: false
+            referencedRelation: "challenges"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
