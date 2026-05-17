@@ -32,7 +32,7 @@ export function MonitoringDialog({ open, onClose }: { open: boolean; onClose: ()
     if (!user) return;
     setBusy(true);
     try {
-      const { data: ai } = await analyze({ data: { log: form } });
+      const ai = await analyze({ data: { log: form } });
       setFeedback(ai.feedback);
       await supabase.from("monitoring_logs").insert({ ...form, user_id: user.id, ai_feedback: ai.feedback });
       toast.success("Check-in tersimpan");
