@@ -64,9 +64,9 @@ function Landing() {
             <div className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-4 py-1.5 text-xs font-medium text-muted-foreground mb-6">
               <Sparkles className="h-3.5 w-3.5 text-teal" /> Didukung AI untuk kesehatan harianmu
             </div>
-            <h1 className="text-4xl md:text-6xl font-bold tracking-tight leading-[1.1]">
-              Kesehatan kamu,{" "}
-              <span className="bg-clip-text text-transparent gradient-hero">dipantau setiap hari.</span>
+            <h1 className="font-display text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tight leading-[1.05] pb-2">
+              <span className="block text-foreground">Kesehatan kamu,</span>
+              <span className="block bg-clip-text text-transparent gradient-hero pb-2">dipantau setiap hari.</span>
             </h1>
             <p className="mt-5 text-base md:text-lg text-muted-foreground max-w-xl mx-auto lg:mx-0">
               Monitoring kesehatan berkelanjutan dengan AI. Catat, konsultasi, dan dapatkan rekomendasi pola hidup sehat — semua dalam satu tempat.
