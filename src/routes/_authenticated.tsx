@@ -16,6 +16,7 @@ function AuthLayout() {
   const [checking, setChecking] = useState(true);
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
   const [needsMonitoring, setNeedsMonitoring] = useState(false);
+  useReminderNotifications(user?.id);
 
   useEffect(() => {
     if (loading) return;
