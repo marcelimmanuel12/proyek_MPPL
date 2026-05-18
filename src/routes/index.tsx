@@ -1,8 +1,9 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
-import { Heart, Activity, Brain, Users, MapPin, Bell, Sparkles, ArrowRight } from "lucide-react";
+import { Heart, Activity, Brain, Users, MapPin, Bell, Sparkles, ArrowRight, ShieldCheck, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
+import heroImg from "@/assets/hero-health.jpg";
 
 export const Route = createFileRoute("/")({
   head: () => ({
