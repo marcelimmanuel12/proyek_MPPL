@@ -1,8 +1,9 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
-import { Heart, Activity, Brain, Users, MapPin, Bell, Sparkles, ArrowRight } from "lucide-react";
+import { Heart, Activity, Brain, Users, MapPin, Bell, Sparkles, ArrowRight, ShieldCheck, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
+import heroImg from "@/assets/hero-health.jpg";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -54,27 +55,44 @@ function Landing() {
 
       {/* Hero */}
       <section className="relative overflow-hidden">
-        <div className="absolute inset-0 -z-10 opacity-40">
-          <div className="absolute top-20 left-10 h-72 w-72 rounded-full bg-teal/30 blur-3xl" />
-          <div className="absolute top-40 right-10 h-96 w-96 rounded-full bg-primary-glow/20 blur-3xl" />
+        <div className="absolute inset-0 -z-10 opacity-50">
+          <div className="absolute top-20 -left-20 h-96 w-96 rounded-full bg-teal/30 blur-3xl" />
+          <div className="absolute top-40 -right-20 h-[28rem] w-[28rem] rounded-full bg-primary-glow/30 blur-3xl" />
         </div>
-        <div className="container mx-auto px-6 py-24 md:py-32 text-center max-w-4xl">
-          <div className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-4 py-1.5 text-xs font-medium text-muted-foreground mb-8">
-            <Sparkles className="h-3.5 w-3.5 text-teal" /> Didukung AI untuk kesehatan harianmu
+        <div className="container mx-auto px-6 py-16 md:py-24 grid lg:grid-cols-2 gap-12 items-center">
+          <div className="text-center lg:text-left">
+            <div className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-4 py-1.5 text-xs font-medium text-muted-foreground mb-6">
+              <Sparkles className="h-3.5 w-3.5 text-teal" /> Didukung AI untuk kesehatan harianmu
+            </div>
+            <h1 className="text-4xl md:text-6xl font-bold tracking-tight leading-[1.1]">
+              Kesehatan kamu,{" "}
+              <span className="bg-clip-text text-transparent gradient-hero">dipantau setiap hari.</span>
+            </h1>
+            <p className="mt-5 text-base md:text-lg text-muted-foreground max-w-xl mx-auto lg:mx-0">
+              Monitoring kesehatan berkelanjutan dengan AI. Catat, konsultasi, dan dapatkan rekomendasi pola hidup sehat — semua dalam satu tempat.
+            </p>
+            <div className="mt-8 flex flex-wrap gap-3 justify-center lg:justify-start">
+              <Link to="/login">
+                <Button size="lg" className="gradient-hero text-white shadow-elegant text-base h-12 px-8">
+                  Mulai Pantau Sekarang <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </Link>
+            </div>
+            <div className="mt-8 flex flex-wrap gap-5 justify-center lg:justify-start text-sm text-muted-foreground">
+              <span className="flex items-center gap-1.5"><ShieldCheck className="h-4 w-4 text-teal" /> Data terenkripsi</span>
+              <span className="flex items-center gap-1.5"><Clock className="h-4 w-4 text-teal" /> Check-in 5 jam</span>
+              <span className="flex items-center gap-1.5"><Brain className="h-4 w-4 text-teal" /> AI 24/7</span>
+            </div>
           </div>
-          <h1 className="text-5xl md:text-7xl font-bold tracking-tight">
-            Kesehatan kamu, <br />
-            <span className="bg-clip-text text-transparent gradient-hero">dipantau setiap hari.</span>
-          </h1>
-          <p className="mt-6 text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto">
-            Monitoring kesehatan berkelanjutan dengan AI. Catat, konsultasi, dan dapatkan rekomendasi pola hidup sehat — semua dalam satu tempat.
-          </p>
-          <div className="mt-10 flex flex-wrap gap-3 justify-center">
-            <Link to="/login">
-              <Button size="lg" className="gradient-hero text-white shadow-elegant text-base h-12 px-8">
-                Mulai Pantau Sekarang <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </Link>
+          <div className="relative">
+            <div className="absolute -inset-6 gradient-hero rounded-3xl blur-2xl opacity-30" />
+            <img
+              src={heroImg}
+              alt="Ilustrasi kesehatan: meditasi dengan ikon kesehatan"
+              width={1280}
+              height={960}
+              className="relative rounded-3xl shadow-elegant w-full h-auto object-cover"
+            />
           </div>
         </div>
       </section>

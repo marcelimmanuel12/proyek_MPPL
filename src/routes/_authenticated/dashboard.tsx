@@ -5,7 +5,7 @@ import { useServerFn } from "@tanstack/react-start";
 import {
   Heart, LogOut, Activity, Pill, Bell, Moon, Dumbbell, Stethoscope,
   Brain, Sparkles, Trophy, Users, MapPin, Plus, Loader2, Send, User as UserIcon,
-  Calendar, TrendingUp,
+  Calendar, TrendingUp, Pencil, Trash2, BellRing,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
@@ -291,68 +291,124 @@ function MedsTab() {
 }
 
 // ============== REMINDERS ==============
+type ReminderForm = { type: string; title: string; reminder_time: string; recurring: string; notes: string };
+const EMPTY_REM: ReminderForm = { type: "sleep", title: "", reminder_time: "22:00", recurring: "daily", notes: "" };
+
 function RemindersTab() {
   const { user } = useAuth();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
-  const [f, setF] = useState({ type: "sleep", title: "", reminder_time: "22:00", recurring: "daily", notes: "" });
+  const [editId, setEditId] = useState<string | null>(null);
+  const [f, setF] = useState<ReminderForm>(EMPTY_REM);
   const { data: rems } = useQuery({
     queryKey: ["rems", user?.id],
-    queryFn: async () => (await supabase.from("reminders").select("*").eq("user_id", user!.id).order("created_at", { ascending: false })).data ?? [],
+    queryFn: async () => (await supabase.from("reminders").select("*").eq("user_id", user!.id).order("reminder_time", { ascending: true })).data ?? [],
     enabled: !!user,
   });
-  const add = async () => {
-    await supabase.from("reminders").insert({ ...f, user_id: user!.id });
-    toast.success("Pengingat ditambahkan"); qc.invalidateQueries({ queryKey: ["rems"] }); setOpen(false);
+
+  const openNew = () => { setEditId(null); setF(EMPTY_REM); setOpen(true); };
+  const openEdit = (r: any) => {
+    setEditId(r.id);
+    setF({ type: r.type, title: r.title, reminder_time: String(r.reminder_time ?? "08:00").slice(0,5), recurring: r.recurring ?? "daily", notes: r.notes ?? "" });
+    setOpen(true);
   };
+
+  const save = async () => {
+    if (!f.title.trim()) { toast.error("Judul wajib diisi"); return; }
+    if (editId) {
+      await supabase.from("reminders").update(f).eq("id", editId);
+      toast.success("Pengingat diperbarui");
+    } else {
+      await supabase.from("reminders").insert({ ...f, user_id: user!.id });
+      toast.success("Pengingat ditambahkan");
+      if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "default") {
+        Notification.requestPermission().catch(() => {});
+      }
+    }
+    qc.invalidateQueries({ queryKey: ["rems"] }); setOpen(false);
+  };
+
+  const del = async (id: string) => {
+    if (!confirm("Hapus pengingat ini?")) return;
+    await supabase.from("reminders").delete().eq("id", id);
+    toast.success("Pengingat dihapus");
+    qc.invalidateQueries({ queryKey: ["rems"] });
+  };
+
+  const toggle = async (r: any) => {
+    await supabase.from("reminders").update({ active: !r.active }).eq("id", r.id);
+    qc.invalidateQueries({ queryKey: ["rems"] });
+  };
+
+  const testNotif = async () => {
+    if (!("Notification" in window)) { toast.error("Browser tidak mendukung notifikasi"); return; }
+    let perm = Notification.permission;
+    if (perm === "default") perm = await Notification.requestPermission();
+    if (perm !== "granted") { toast.error("Izin notifikasi ditolak"); return; }
+    new Notification("🔔 Notifikasi aktif!", { body: "Pengingatmu akan muncul tepat waktu." });
+    toast.success("Notifikasi berhasil dikirim");
+  };
+
   const icons: Record<string, any> = { sleep: Moon, exercise: Dumbbell, checkup: Stethoscope, custom: Bell };
   return (
     <>
       <SectionHeader title="Pengingat" desc="Tidur, olahraga, check-up — semua di sini." action={
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild><Button className="gradient-hero text-white"><Plus className="h-4 w-4 mr-1" /> Tambah</Button></DialogTrigger>
-          <DialogContent>
-            <DialogHeader><DialogTitle>Pengingat Baru</DialogTitle></DialogHeader>
-            <div className="space-y-3">
-              <div className="space-y-1.5"><Label>Jenis</Label>
-                <Select value={f.type} onValueChange={(v) => setF({ ...f, type: v })}>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={testNotif}><BellRing className="h-4 w-4 mr-1" />Aktifkan Notif</Button>
+          <Button onClick={openNew} className="gradient-hero text-white"><Plus className="h-4 w-4 mr-1" />Tambah</Button>
+        </div>
+      } />
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>{editId ? "Edit Pengingat" : "Pengingat Baru"}</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5"><Label>Jenis</Label>
+              <Select value={f.type} onValueChange={(v) => setF({ ...f, type: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="sleep">😴 Tidur</SelectItem>
+                  <SelectItem value="exercise">🏃 Olahraga</SelectItem>
+                  <SelectItem value="checkup">🩺 Check-up</SelectItem>
+                  <SelectItem value="custom">🔔 Lainnya</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5"><Label>Judul</Label><Input value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} placeholder="Misal: Tidur malam" /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5"><Label>Waktu</Label><Input type="time" value={f.reminder_time} onChange={(e) => setF({ ...f, reminder_time: e.target.value })} /></div>
+              <div className="space-y-1.5"><Label>Berulang</Label>
+                <Select value={f.recurring} onValueChange={(v) => setF({ ...f, recurring: v })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="sleep">😴 Tidur</SelectItem>
-                    <SelectItem value="exercise">🏃 Olahraga</SelectItem>
-                    <SelectItem value="checkup">🩺 Check-up</SelectItem>
-                    <SelectItem value="custom">🔔 Lainnya</SelectItem>
-                  </SelectContent>
+                  <SelectContent><SelectItem value="daily">Harian</SelectItem><SelectItem value="weekly">Mingguan</SelectItem><SelectItem value="monthly">Bulanan</SelectItem><SelectItem value="none">Sekali</SelectItem></SelectContent>
                 </Select>
               </div>
-              <div className="space-y-1.5"><Label>Judul</Label><Input value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} /></div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5"><Label>Waktu</Label><Input type="time" value={f.reminder_time} onChange={(e) => setF({ ...f, reminder_time: e.target.value })} /></div>
-                <div className="space-y-1.5"><Label>Berulang</Label>
-                  <Select value={f.recurring} onValueChange={(v) => setF({ ...f, recurring: v })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent><SelectItem value="daily">Harian</SelectItem><SelectItem value="weekly">Mingguan</SelectItem><SelectItem value="monthly">Bulanan</SelectItem><SelectItem value="none">Sekali</SelectItem></SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <Button onClick={add} className="w-full gradient-hero text-white">Simpan</Button>
             </div>
-          </DialogContent>
-        </Dialog>
-      } />
+            <div className="space-y-1.5"><Label>Catatan</Label><Textarea value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} rows={2} /></div>
+            <Button onClick={save} className="w-full gradient-hero text-white">{editId ? "Update" : "Simpan"}</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
       <div className="grid md:grid-cols-2 gap-4">
         {rems?.length ? rems.map((r: any) => {
           const Icon = icons[r.type] ?? Bell;
           return (
-            <Card key={r.id} className="p-5 flex items-center gap-4">
-              <div className="h-12 w-12 rounded-xl gradient-teal grid place-items-center text-white"><Icon className="h-5 w-5" /></div>
-              <div className="flex-1">
-                <h3 className="font-semibold">{r.title}</h3>
-                <p className="text-sm text-muted-foreground">{r.reminder_time} · {r.recurring}</p>
+            <Card key={r.id} className={`p-5 flex items-center gap-4 ${!r.active ? "opacity-50" : ""}`}>
+              <div className="h-12 w-12 rounded-xl gradient-teal grid place-items-center text-white shrink-0"><Icon className="h-5 w-5" /></div>
+              <div className="flex-1 min-w-0">
+                <h3 className="font-semibold truncate">{r.title}</h3>
+                <p className="text-sm text-muted-foreground">{String(r.reminder_time ?? "").slice(0,5)} · {r.recurring}</p>
+                {r.notes && <p className="text-xs text-muted-foreground mt-1 truncate">{r.notes}</p>}
+              </div>
+              <div className="flex flex-col gap-1">
+                <Button size="icon" variant="ghost" onClick={() => toggle(r)} title={r.active ? "Nonaktifkan" : "Aktifkan"}>
+                  <Bell className={`h-4 w-4 ${r.active ? "text-teal" : "text-muted-foreground"}`} />
+                </Button>
+                <Button size="icon" variant="ghost" onClick={() => openEdit(r)}><Pencil className="h-4 w-4" /></Button>
+                <Button size="icon" variant="ghost" onClick={() => del(r.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
               </div>
             </Card>
           );
-        }) : <p className="text-muted-foreground">Belum ada pengingat.</p>}
+        }) : <p className="text-muted-foreground">Belum ada pengingat. Klik "Tambah" untuk membuat.</p>}
       </div>
     </>
   );
