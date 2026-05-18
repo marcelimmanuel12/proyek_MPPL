@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { Loader2 } from "lucide-react";
 import { MonitoringDialog } from "@/components/MonitoringDialog";
+import { useReminderNotifications } from "@/hooks/use-reminder-notifications";
 
 export const Route = createFileRoute("/_authenticated")({
   component: AuthLayout,
