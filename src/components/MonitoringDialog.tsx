@@ -5,7 +5,6 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useServerFn } from "@tanstack/react-start";
 import { analyzeMonitoring } from "@/lib/ai.functions";
 import { supabase } from "@/integrations/supabase/client";
@@ -19,7 +18,7 @@ export function MonitoringDialog({ open, onClose }: { open: boolean; onClose: ()
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [form, setForm] = useState({
-    mood: "baik",
+    mood: "",
     ate_breakfast: false, ate_lunch: false, ate_dinner: false,
     exercised: false,
     water_glasses: 0,
@@ -27,6 +26,8 @@ export function MonitoringDialog({ open, onClose }: { open: boolean; onClose: ()
     symptoms: "",
     notes: "",
   });
+
+  const submitDisabled = busy || !form.mood.trim();
 
   const submit = async () => {
     if (!user) return;
@@ -57,17 +58,14 @@ export function MonitoringDialog({ open, onClose }: { open: boolean; onClose: ()
         ) : (
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>Bagaimana keadaanmu?</Label>
-              <Select value={form.mood} onValueChange={(v) => setForm({ ...form, mood: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="sangat-baik">😄 Sangat Baik</SelectItem>
-                  <SelectItem value="baik">🙂 Baik</SelectItem>
-                  <SelectItem value="biasa">😐 Biasa</SelectItem>
-                  <SelectItem value="kurang">😕 Kurang</SelectItem>
-                  <SelectItem value="buruk">😣 Buruk</SelectItem>
-                </SelectContent>
-              </Select>
+              <Label>Bagaimana keadaanmu sekarang?</Label>
+              <Textarea
+                value={form.mood}
+                onChange={(e) => setForm({ ...form, mood: e.target.value })}
+                placeholder="Ceritakan kondisimu hari ini... (misal: badan terasa segar, sedikit lelah, kepala agak pusing)"
+                rows={3}
+                required
+              />
             </div>
             <div className="space-y-2">
               <Label>Makan hari ini</Label>
@@ -102,7 +100,7 @@ export function MonitoringDialog({ open, onClose }: { open: boolean; onClose: ()
               <Label>Catatan</Label>
               <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} />
             </div>
-            <Button onClick={submit} disabled={busy} className="w-full gradient-hero text-white h-11">
+            <Button onClick={submit} disabled={submitDisabled} className="w-full gradient-hero text-white h-11">
               {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Kirim & Analisis AI"}
             </Button>
           </div>

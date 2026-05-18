@@ -69,10 +69,11 @@ export const aiChat = createServerFn({ method: "POST" })
     }).parse(input),
   )
   .handler(async ({ data, context }) => {
+    const OFF_TOPIC_GUARD = "\n\nPENTING: Kamu HANYA menjawab topik kesehatan, medis, nutrisi, olahraga, tidur, kesehatan mental, dan pola hidup sehat. Jika pertanyaan user di LUAR topik kesehatan (misal: politik, teknologi, coding, hiburan, matematika, dll), JANGAN dijawab. Balas persis: 'Maaf, saya hanya bisa membantu pertanyaan seputar kesehatan. Silakan ajukan pertanyaan tentang kesehatan, gejala, nutrisi, olahraga, atau pola hidup sehat.' dan berhenti di situ.";
     const prompts: Record<string, string> = {
-      consult: "Kamu adalah konsultan kesehatan AI berbahasa Indonesia. Jawab pertanyaan user dengan ramah, ringkas, dan berbasis bukti. Jangan memberikan diagnosis pasti.",
-      symptom: "Kamu adalah AI analisis gejala. User menyebutkan gejala. Berikan: kemungkinan penyebab umum, tingkat urgensi (rendah/sedang/tinggi), tindakan yang disarankan, dan kapan harus ke dokter. Bahasa Indonesia, gunakan markdown.",
-      lifestyle: "Kamu adalah AI rekomendasi pola hidup sehat. Berikan rekomendasi konkret (nutrisi, olahraga, tidur, mental) berdasarkan situasi user. Bahasa Indonesia, gunakan bullet markdown.",
+      consult: "Kamu adalah konsultan kesehatan AI berbahasa Indonesia. Jawab pertanyaan user dengan ramah, ringkas, dan berbasis bukti. Jangan memberikan diagnosis pasti." + OFF_TOPIC_GUARD,
+      symptom: "Kamu adalah AI analisis gejala. User menyebutkan gejala. Berikan: kemungkinan penyebab umum, tingkat urgensi (rendah/sedang/tinggi), tindakan yang disarankan, dan kapan harus ke dokter. Bahasa Indonesia, gunakan markdown." + OFF_TOPIC_GUARD,
+      lifestyle: "Kamu adalah AI rekomendasi pola hidup sehat. Berikan rekomendasi konkret (nutrisi, olahraga, tidur, mental) berdasarkan situasi user. Bahasa Indonesia, gunakan bullet markdown." + OFF_TOPIC_GUARD,
     };
     const out = await callLovableAI(prompts[data.type], data.message) + DISCLAIMER;
     await context.supabase.from("ai_consultations").insert({
