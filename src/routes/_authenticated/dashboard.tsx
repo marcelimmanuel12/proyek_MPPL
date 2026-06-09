@@ -549,6 +549,9 @@ function ProgressTab() {
 function ChallengesTab() {
   const { user } = useAuth();
   const qc = useQueryClient();
+  const [openId, setOpenId] = useState<string | null>(null);
+  const getLb = useServerFn(require("@/lib/challenges.functions").getLeaderboard);
+
   const { data: challenges } = useQuery({
     queryKey: ["challenges"],
     queryFn: async () => (await supabase.from("challenges").select("*").order("created_at")).data ?? [],
@@ -558,31 +561,132 @@ function ChallengesTab() {
     queryFn: async () => (await supabase.from("user_challenges").select("*").eq("user_id", user!.id)).data ?? [],
     enabled: !!user,
   });
-  const join = async (id: string) => {
-    await supabase.from("user_challenges").insert({ user_id: user!.id, challenge_id: id });
-    toast.success("Bergabung ke challenge");
+  const { data: badges } = useQuery({
+    queryKey: ["my-badges", user?.id],
+    queryFn: async () => (await supabase.from("user_badges").select("*").eq("user_id", user!.id)).data ?? [],
+    enabled: !!user,
+  });
+  const { data: lb } = useQuery({
+    queryKey: ["leaderboard"],
+    queryFn: async () => (await getLb()).rows,
+  });
+
+  const myMap = new Map((mine ?? []).map((m: any) => [m.challenge_id, m]));
+
+  const join = async (c: any) => {
+    await supabase.from("user_challenges").insert({ user_id: user!.id, challenge_id: c.id });
+    toast.success(`Bergabung ke ${c.title}`);
     qc.invalidateQueries({ queryKey: ["my-challenges"] });
+    qc.invalidateQueries({ queryKey: ["leaderboard"] });
   };
-  const joined = new Set((mine ?? []).map((m: any) => m.challenge_id));
+
+  const checkIn = async (c: any) => {
+    const uc: any = myMap.get(c.id);
+    if (!uc) return;
+    const today = new Date().toISOString().slice(0, 10);
+    if (uc.last_checkin === today) { toast.info("Sudah check-in hari ini"); return; }
+    const newProgress = Math.min((uc.progress_days ?? 0) + 1, c.duration_days);
+    const completed = newProgress >= c.duration_days;
+    await supabase.from("user_challenges").update({ progress_days: newProgress, completed }).eq("id", uc.id);
+    if (completed) {
+      await supabase.from("user_badges").insert({
+        user_id: user!.id,
+        badge_code: `challenge-${c.id}`,
+        label: `🏆 ${c.title}`,
+      }).then(() => {/* ignore duplicate */});
+      toast.success(`🎉 Challenge "${c.title}" selesai! Badge diberikan.`);
+    } else {
+      toast.success(`Check-in berhasil! Hari ${newProgress}/${c.duration_days}`);
+    }
+    qc.invalidateQueries({ queryKey: ["my-challenges"] });
+    qc.invalidateQueries({ queryKey: ["my-badges"] });
+    qc.invalidateQueries({ queryKey: ["leaderboard"] });
+  };
+
+  const leave = async (c: any) => {
+    const uc: any = myMap.get(c.id);
+    if (!uc) return;
+    if (!confirm(`Keluar dari "${c.title}"?`)) return;
+    await supabase.from("user_challenges").delete().eq("id", uc.id);
+    toast.success("Keluar dari challenge");
+    qc.invalidateQueries({ queryKey: ["my-challenges"] });
+    qc.invalidateQueries({ queryKey: ["leaderboard"] });
+  };
+
   return (
     <>
-      <SectionHeader title="Challenge Kesehatan" desc="Bangun kebiasaan sehat bersama." />
-      <div className="grid md:grid-cols-2 gap-4">
-        {challenges?.map((c: any) => (
-          <Card key={c.id} className="p-5">
-            <div className="flex items-start justify-between">
-              <div className="flex-1">
-                <div className="flex items-center gap-2"><span className="text-2xl">{c.icon}</span><h3 className="font-semibold">{c.title}</h3></div>
-                <p className="text-sm text-muted-foreground mt-2">{c.description}</p>
-                <Badge variant="secondary" className="mt-3">{c.duration_days} hari · {c.category}</Badge>
+      <SectionHeader title="Challenge Kesehatan" desc="Ikuti tantangan, check-in harian, dan raih badge." />
+
+      {badges && badges.length > 0 && (
+        <Card className="p-4 mb-6 bg-gradient-to-br from-amber-50 to-teal/5 border-amber-200">
+          <p className="text-xs text-muted-foreground mb-2">🏅 Badge kamu</p>
+          <div className="flex flex-wrap gap-2">
+            {badges.map((b: any) => <Badge key={b.id} className="bg-amber-100 text-amber-900 border-amber-300">{b.label}</Badge>)}
+          </div>
+        </Card>
+      )}
+
+      <div className="grid md:grid-cols-2 gap-4 mb-8">
+        {challenges?.map((c: any) => {
+          const uc: any = myMap.get(c.id);
+          const progress = uc ? Math.round(((uc.progress_days ?? 0) / c.duration_days) * 100) : 0;
+          const status = !uc ? "Belum mulai" : uc.completed ? "Selesai 🏆" : "Berjalan";
+          return (
+            <Card key={c.id} className="p-5">
+              <div className="flex items-center gap-2"><span className="text-2xl">{c.icon}</span><h3 className="font-semibold">{c.title}</h3></div>
+              <p className="text-sm text-muted-foreground mt-2">{c.description}</p>
+              <div className="flex gap-1.5 mt-3 flex-wrap">
+                <Badge variant="secondary">🎯 {c.duration_days} hari</Badge>
+                <Badge variant="outline">{c.category}</Badge>
+                <Badge className={uc?.completed ? "bg-teal text-white" : "bg-muted text-foreground"}>{status}</Badge>
               </div>
-            </div>
-            <Button onClick={() => join(c.id)} disabled={joined.has(c.id)} className="w-full mt-4 gradient-hero text-white">
-              {joined.has(c.id) ? "✓ Sudah bergabung" : "Ikut Challenge"}
-            </Button>
-          </Card>
-        ))}
+              {uc && (
+                <div className="mt-3">
+                  <div className="flex justify-between text-xs text-muted-foreground mb-1">
+                    <span>Progress hari {uc.progress_days ?? 0}/{c.duration_days}</span>
+                    <span>{progress}%</span>
+                  </div>
+                  <Progress value={progress} />
+                </div>
+              )}
+              <div className="flex gap-2 mt-4">
+                {!uc && <Button onClick={() => join(c)} className="flex-1 gradient-hero text-white">Ikut Challenge</Button>}
+                {uc && !uc.completed && <Button onClick={() => checkIn(c)} className="flex-1 gradient-hero text-white">Check-in hari ini</Button>}
+                {uc && <Button variant="outline" onClick={() => setOpenId(openId === c.id ? null : c.id)}>Detail</Button>}
+                {uc && !uc.completed && <Button size="icon" variant="ghost" onClick={() => leave(c)}><Trash2 className="h-4 w-4 text-destructive" /></Button>}
+              </div>
+              {openId === c.id && uc && (
+                <div className="mt-3 pt-3 border-t text-xs text-muted-foreground space-y-1">
+                  <p>📅 Mulai: {new Date(uc.started_at).toLocaleDateString("id-ID")}</p>
+                  <p>🎯 Target: {c.duration_days} hari berturut</p>
+                  <p>📊 Sisa: {Math.max(c.duration_days - (uc.progress_days ?? 0), 0)} hari</p>
+                </div>
+              )}
+            </Card>
+          );
+        })}
       </div>
+
+      <Card className="p-5">
+        <div className="flex items-center gap-2 mb-4"><Trophy className="h-5 w-5 text-amber-500" /><h3 className="font-semibold">Leaderboard</h3></div>
+        {lb && lb.length > 0 ? (
+          <div className="space-y-2">
+            {lb.map((row: any, i: number) => (
+              <div key={row.user_id} className={`flex items-center justify-between gap-3 p-3 rounded-lg ${row.user_id === user?.id ? "bg-teal/10" : "bg-muted/50"}`}>
+                <div className="flex items-center gap-3 min-w-0">
+                  <span className={`h-7 w-7 grid place-items-center rounded-full font-bold text-sm ${i === 0 ? "bg-amber-400 text-white" : i === 1 ? "bg-slate-300" : i === 2 ? "bg-amber-700 text-white" : "bg-background border"}`}>{i + 1}</span>
+                  <span className="font-medium truncate">{row.name}{row.user_id === user?.id && " (kamu)"}</span>
+                </div>
+                <div className="flex gap-1.5 text-xs">
+                  <Badge variant="secondary">🏆 {row.completed}</Badge>
+                  <Badge variant="outline">{row.total_progress}d</Badge>
+                  {row.badges > 0 && <Badge className="bg-amber-100 text-amber-900 border-0">🏅 {row.badges}</Badge>}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : <p className="text-sm text-muted-foreground">Belum ada peserta. Ikut challenge pertama untuk muncul di sini!</p>}
+      </Card>
     </>
   );
 }
