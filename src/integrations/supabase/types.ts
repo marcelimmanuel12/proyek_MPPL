@@ -169,6 +169,45 @@ export type Database = {
         }
         Relationships: []
       }
+      hospital_bookings: {
+        Row: {
+          booking_date: string
+          booking_time: string | null
+          complaint: string | null
+          created_at: string
+          hospital_address: string | null
+          hospital_name: string
+          hospital_phone: string | null
+          id: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          booking_date: string
+          booking_time?: string | null
+          complaint?: string | null
+          created_at?: string
+          hospital_address?: string | null
+          hospital_name: string
+          hospital_phone?: string | null
+          id?: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          booking_date?: string
+          booking_time?: string | null
+          complaint?: string | null
+          created_at?: string
+          hospital_address?: string | null
+          hospital_name?: string
+          hospital_phone?: string | null
+          id?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       initial_questionnaire: {
         Row: {
           ai_analysis: string | null
@@ -372,6 +411,30 @@ export type Database = {
           reminder_time?: string | null
           title?: string
           type?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_badges: {
+        Row: {
+          badge_code: string
+          earned_at: string
+          id: string
+          label: string
+          user_id: string
+        }
+        Insert: {
+          badge_code: string
+          earned_at?: string
+          id?: string
+          label: string
+          user_id: string
+        }
+        Update: {
+          badge_code?: string
+          earned_at?: string
+          id?: string
+          label?: string
           user_id?: string
         }
         Relationships: []

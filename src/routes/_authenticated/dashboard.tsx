@@ -10,6 +10,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { aiChat } from "@/lib/ai.functions";
+import { getLeaderboard } from "@/lib/challenges.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -20,6 +21,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "sonner";
+import { HOSPITALS, haversineKm } from "@/lib/hospitals-data";
+import { Progress } from "@/components/ui/progress";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   head: () => ({ meta: [{ title: "Dashboard — SehatKu" }] }),
@@ -231,51 +234,83 @@ function HistoryTab() {
 }
 
 // ============== MEDICATIONS ==============
+type MedForm = { name: string; dosage: string; times_per_day: number; schedule_times: string; notes: string };
+const EMPTY_MED: MedForm = { name: "", dosage: "", times_per_day: 1, schedule_times: "08:00", notes: "" };
+
 function MedsTab() {
   const { user } = useAuth();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
-  const [f, setF] = useState({ name: "", dosage: "", times_per_day: 1, schedule_times: "08:00", notes: "" });
+  const [editId, setEditId] = useState<string | null>(null);
+  const [f, setF] = useState<MedForm>(EMPTY_MED);
   const { data: meds } = useQuery({
     queryKey: ["meds", user?.id],
     queryFn: async () => (await supabase.from("medications").select("*").eq("user_id", user!.id).order("created_at", { ascending: false })).data ?? [],
     enabled: !!user,
   });
-  const add = async () => {
-    await supabase.from("medications").insert({
-      user_id: user!.id, name: f.name, dosage: f.dosage, times_per_day: f.times_per_day,
-      schedule_times: f.schedule_times.split(",").map((s) => s.trim()), notes: f.notes,
-    });
-    toast.success("Obat ditambahkan");
+
+  const openNew = () => { setEditId(null); setF(EMPTY_MED); setOpen(true); };
+  const openEdit = (m: any) => {
+    setEditId(m.id);
+    setF({ name: m.name, dosage: m.dosage ?? "", times_per_day: m.times_per_day ?? 1, schedule_times: (m.schedule_times ?? []).join(","), notes: m.notes ?? "" });
+    setOpen(true);
+  };
+
+  const save = async () => {
+    if (!f.name.trim()) { toast.error("Nama obat wajib diisi"); return; }
+    const payload = {
+      name: f.name, dosage: f.dosage, times_per_day: f.times_per_day,
+      schedule_times: f.schedule_times.split(",").map((s) => s.trim()).filter(Boolean),
+      notes: f.notes,
+    };
+    if (editId) {
+      await supabase.from("medications").update(payload).eq("id", editId);
+      toast.success("Obat diperbarui");
+    } else {
+      await supabase.from("medications").insert({ ...payload, user_id: user!.id });
+      toast.success("Obat ditambahkan");
+    }
     qc.invalidateQueries({ queryKey: ["meds"] });
     setOpen(false);
-    setF({ name: "", dosage: "", times_per_day: 1, schedule_times: "08:00", notes: "" });
   };
+
+  const del = async (id: string) => {
+    if (!confirm("Hapus obat ini?")) return;
+    await supabase.from("medications").delete().eq("id", id);
+    toast.success("Obat dihapus");
+    qc.invalidateQueries({ queryKey: ["meds"] });
+  };
+
+  const toggle = async (m: any) => {
+    await supabase.from("medications").update({ active: !m.active }).eq("id", m.id);
+    qc.invalidateQueries({ queryKey: ["meds"] });
+  };
+
   return (
     <>
       <SectionHeader title="Jadwal Obat" desc="Pengingat minum obat harian." action={
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild><Button className="gradient-hero text-white"><Plus className="h-4 w-4 mr-1" /> Tambah</Button></DialogTrigger>
-          <DialogContent>
-            <DialogHeader><DialogTitle>Tambah Obat</DialogTitle></DialogHeader>
-            <div className="space-y-3">
-              <div className="space-y-1.5"><Label>Nama obat</Label><Input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></div>
-              <div className="space-y-1.5"><Label>Dosis</Label><Input value={f.dosage} onChange={(e) => setF({ ...f, dosage: e.target.value })} placeholder="500mg, 1 tablet..." /></div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5"><Label>Frekuensi/hari</Label><Input type="number" min={1} value={f.times_per_day} onChange={(e) => setF({ ...f, times_per_day: +e.target.value })} /></div>
-                <div className="space-y-1.5"><Label>Jam (pisah koma)</Label><Input value={f.schedule_times} onChange={(e) => setF({ ...f, schedule_times: e.target.value })} placeholder="08:00,14:00,20:00" /></div>
-              </div>
-              <div className="space-y-1.5"><Label>Catatan</Label><Textarea value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} /></div>
-              <Button onClick={add} className="w-full gradient-hero text-white">Simpan</Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+        <Button onClick={openNew} className="gradient-hero text-white"><Plus className="h-4 w-4 mr-1" /> Tambah</Button>
       } />
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>{editId ? "Edit Obat" : "Tambah Obat"}</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5"><Label>Nama obat</Label><Input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></div>
+            <div className="space-y-1.5"><Label>Dosis</Label><Input value={f.dosage} onChange={(e) => setF({ ...f, dosage: e.target.value })} placeholder="500mg, 1 tablet..." /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5"><Label>Frekuensi/hari</Label><Input type="number" min={1} value={f.times_per_day} onChange={(e) => setF({ ...f, times_per_day: +e.target.value })} /></div>
+              <div className="space-y-1.5"><Label>Jam (pisah koma)</Label><Input value={f.schedule_times} onChange={(e) => setF({ ...f, schedule_times: e.target.value })} placeholder="08:00,14:00,20:00" /></div>
+            </div>
+            <div className="space-y-1.5"><Label>Catatan</Label><Textarea value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} /></div>
+            <Button onClick={save} className="w-full gradient-hero text-white">{editId ? "Update" : "Simpan"}</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
       <div className="grid md:grid-cols-2 gap-4">
         {meds?.length ? meds.map((m: any) => (
-          <Card key={m.id} className="p-5">
-            <div className="flex items-start justify-between">
-              <div>
+          <Card key={m.id} className={`p-5 ${!m.active ? "opacity-60" : ""}`}>
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex-1 min-w-0">
                 <h3 className="font-semibold flex items-center gap-2"><Pill className="h-4 w-4 text-teal" />{m.name}</h3>
                 <p className="text-sm text-muted-foreground mt-1">{m.dosage}</p>
               </div>
@@ -283,6 +318,11 @@ function MedsTab() {
             </div>
             <div className="mt-3 flex gap-1.5 flex-wrap">{(m.schedule_times ?? []).map((t: string) => <Badge key={t} className="bg-teal/10 text-teal hover:bg-teal/20 border-0">{t}</Badge>)}</div>
             {m.notes && <p className="text-xs text-muted-foreground mt-3">{m.notes}</p>}
+            <div className="flex gap-1 mt-3 justify-end">
+              <Button size="icon" variant="ghost" onClick={() => toggle(m)} title={m.active ? "Nonaktifkan" : "Aktifkan"}><Bell className={`h-4 w-4 ${m.active ? "text-teal" : "text-muted-foreground"}`} /></Button>
+              <Button size="icon" variant="ghost" onClick={() => openEdit(m)}><Pencil className="h-4 w-4" /></Button>
+              <Button size="icon" variant="ghost" onClick={() => del(m.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+            </div>
           </Card>
         )) : <p className="text-muted-foreground">Belum ada obat. Klik "Tambah".</p>}
       </div>
@@ -547,6 +587,9 @@ function ProgressTab() {
 function ChallengesTab() {
   const { user } = useAuth();
   const qc = useQueryClient();
+  const [openId, setOpenId] = useState<string | null>(null);
+  const getLb = useServerFn(getLeaderboard);
+
   const { data: challenges } = useQuery({
     queryKey: ["challenges"],
     queryFn: async () => (await supabase.from("challenges").select("*").order("created_at")).data ?? [],
@@ -556,31 +599,134 @@ function ChallengesTab() {
     queryFn: async () => (await supabase.from("user_challenges").select("*").eq("user_id", user!.id)).data ?? [],
     enabled: !!user,
   });
-  const join = async (id: string) => {
-    await supabase.from("user_challenges").insert({ user_id: user!.id, challenge_id: id });
-    toast.success("Bergabung ke challenge");
+  const { data: badges } = useQuery({
+    queryKey: ["my-badges", user?.id],
+    queryFn: async () => (await supabase.from("user_badges").select("*").eq("user_id", user!.id)).data ?? [],
+    enabled: !!user,
+  });
+  const { data: lb } = useQuery({
+    queryKey: ["leaderboard"],
+    queryFn: async () => (await getLb()).rows,
+  });
+
+  const myMap = new Map((mine ?? []).map((m: any) => [m.challenge_id, m]));
+
+  const join = async (c: any) => {
+    await supabase.from("user_challenges").insert({ user_id: user!.id, challenge_id: c.id });
+    toast.success(`Bergabung ke ${c.title}`);
     qc.invalidateQueries({ queryKey: ["my-challenges"] });
+    qc.invalidateQueries({ queryKey: ["leaderboard"] });
   };
-  const joined = new Set((mine ?? []).map((m: any) => m.challenge_id));
+
+  const checkIn = async (c: any) => {
+    const uc: any = myMap.get(c.id);
+    if (!uc) return;
+    const today = new Date().toISOString().slice(0, 10);
+    const lsKey = `checkin-${uc.id}-${today}`;
+    if (typeof window !== "undefined" && localStorage.getItem(lsKey)) { toast.info("Sudah check-in hari ini"); return; }
+    if (typeof window !== "undefined") localStorage.setItem(lsKey, "1");
+    const newProgress = Math.min((uc.progress_days ?? 0) + 1, c.duration_days);
+    const completed = newProgress >= c.duration_days;
+    await supabase.from("user_challenges").update({ progress_days: newProgress, completed }).eq("id", uc.id);
+    if (completed) {
+      await supabase.from("user_badges").insert({
+        user_id: user!.id,
+        badge_code: `challenge-${c.id}`,
+        label: `🏆 ${c.title}`,
+      }).then(() => {/* ignore duplicate */});
+      toast.success(`🎉 Challenge "${c.title}" selesai! Badge diberikan.`);
+    } else {
+      toast.success(`Check-in berhasil! Hari ${newProgress}/${c.duration_days}`);
+    }
+    qc.invalidateQueries({ queryKey: ["my-challenges"] });
+    qc.invalidateQueries({ queryKey: ["my-badges"] });
+    qc.invalidateQueries({ queryKey: ["leaderboard"] });
+  };
+
+  const leave = async (c: any) => {
+    const uc: any = myMap.get(c.id);
+    if (!uc) return;
+    if (!confirm(`Keluar dari "${c.title}"?`)) return;
+    await supabase.from("user_challenges").delete().eq("id", uc.id);
+    toast.success("Keluar dari challenge");
+    qc.invalidateQueries({ queryKey: ["my-challenges"] });
+    qc.invalidateQueries({ queryKey: ["leaderboard"] });
+  };
+
   return (
     <>
-      <SectionHeader title="Challenge Kesehatan" desc="Bangun kebiasaan sehat bersama." />
-      <div className="grid md:grid-cols-2 gap-4">
-        {challenges?.map((c: any) => (
-          <Card key={c.id} className="p-5">
-            <div className="flex items-start justify-between">
-              <div className="flex-1">
-                <div className="flex items-center gap-2"><span className="text-2xl">{c.icon}</span><h3 className="font-semibold">{c.title}</h3></div>
-                <p className="text-sm text-muted-foreground mt-2">{c.description}</p>
-                <Badge variant="secondary" className="mt-3">{c.duration_days} hari · {c.category}</Badge>
+      <SectionHeader title="Challenge Kesehatan" desc="Ikuti tantangan, check-in harian, dan raih badge." />
+
+      {badges && badges.length > 0 && (
+        <Card className="p-4 mb-6 bg-gradient-to-br from-amber-50 to-teal/5 border-amber-200">
+          <p className="text-xs text-muted-foreground mb-2">🏅 Badge kamu</p>
+          <div className="flex flex-wrap gap-2">
+            {badges.map((b: any) => <Badge key={b.id} className="bg-amber-100 text-amber-900 border-amber-300">{b.label}</Badge>)}
+          </div>
+        </Card>
+      )}
+
+      <div className="grid md:grid-cols-2 gap-4 mb-8">
+        {challenges?.map((c: any) => {
+          const uc: any = myMap.get(c.id);
+          const progress = uc ? Math.round(((uc.progress_days ?? 0) / c.duration_days) * 100) : 0;
+          const status = !uc ? "Belum mulai" : uc.completed ? "Selesai 🏆" : "Berjalan";
+          return (
+            <Card key={c.id} className="p-5">
+              <div className="flex items-center gap-2"><span className="text-2xl">{c.icon}</span><h3 className="font-semibold">{c.title}</h3></div>
+              <p className="text-sm text-muted-foreground mt-2">{c.description}</p>
+              <div className="flex gap-1.5 mt-3 flex-wrap">
+                <Badge variant="secondary">🎯 {c.duration_days} hari</Badge>
+                <Badge variant="outline">{c.category}</Badge>
+                <Badge className={uc?.completed ? "bg-teal text-white" : "bg-muted text-foreground"}>{status}</Badge>
               </div>
-            </div>
-            <Button onClick={() => join(c.id)} disabled={joined.has(c.id)} className="w-full mt-4 gradient-hero text-white">
-              {joined.has(c.id) ? "✓ Sudah bergabung" : "Ikut Challenge"}
-            </Button>
-          </Card>
-        ))}
+              {uc && (
+                <div className="mt-3">
+                  <div className="flex justify-between text-xs text-muted-foreground mb-1">
+                    <span>Progress hari {uc.progress_days ?? 0}/{c.duration_days}</span>
+                    <span>{progress}%</span>
+                  </div>
+                  <Progress value={progress} />
+                </div>
+              )}
+              <div className="flex gap-2 mt-4">
+                {!uc && <Button onClick={() => join(c)} className="flex-1 gradient-hero text-white">Ikut Challenge</Button>}
+                {uc && !uc.completed && <Button onClick={() => checkIn(c)} className="flex-1 gradient-hero text-white">Check-in hari ini</Button>}
+                {uc && <Button variant="outline" onClick={() => setOpenId(openId === c.id ? null : c.id)}>Detail</Button>}
+                {uc && !uc.completed && <Button size="icon" variant="ghost" onClick={() => leave(c)}><Trash2 className="h-4 w-4 text-destructive" /></Button>}
+              </div>
+              {openId === c.id && uc && (
+                <div className="mt-3 pt-3 border-t text-xs text-muted-foreground space-y-1">
+                  <p>📅 Mulai: {new Date(uc.started_at).toLocaleDateString("id-ID")}</p>
+                  <p>🎯 Target: {c.duration_days} hari berturut</p>
+                  <p>📊 Sisa: {Math.max(c.duration_days - (uc.progress_days ?? 0), 0)} hari</p>
+                </div>
+              )}
+            </Card>
+          );
+        })}
       </div>
+
+      <Card className="p-5">
+        <div className="flex items-center gap-2 mb-4"><Trophy className="h-5 w-5 text-amber-500" /><h3 className="font-semibold">Leaderboard</h3></div>
+        {lb && lb.length > 0 ? (
+          <div className="space-y-2">
+            {lb.map((row: any, i: number) => (
+              <div key={row.user_id} className={`flex items-center justify-between gap-3 p-3 rounded-lg ${row.user_id === user?.id ? "bg-teal/10" : "bg-muted/50"}`}>
+                <div className="flex items-center gap-3 min-w-0">
+                  <span className={`h-7 w-7 grid place-items-center rounded-full font-bold text-sm ${i === 0 ? "bg-amber-400 text-white" : i === 1 ? "bg-slate-300" : i === 2 ? "bg-amber-700 text-white" : "bg-background border"}`}>{i + 1}</span>
+                  <span className="font-medium truncate">{row.name}{row.user_id === user?.id && " (kamu)"}</span>
+                </div>
+                <div className="flex gap-1.5 text-xs">
+                  <Badge variant="secondary">🏆 {row.completed}</Badge>
+                  <Badge variant="outline">{row.total_progress}d</Badge>
+                  {row.badges > 0 && <Badge className="bg-amber-100 text-amber-900 border-0">🏅 {row.badges}</Badge>}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : <p className="text-sm text-muted-foreground">Belum ada peserta. Ikut challenge pertama untuk muncul di sini!</p>}
+      </Card>
     </>
   );
 }
@@ -631,17 +777,126 @@ function ForumTab() {
 
 // ============== MAP ==============
 function MapTab() {
+  const { user } = useAuth();
+  const qc = useQueryClient();
+  const [search, setSearch] = useState("");
+  const [userLoc, setUserLoc] = useState<{ lat: number; lng: number } | null>(null);
+  const [bookingFor, setBookingFor] = useState<any>(null);
+  const [bf, setBf] = useState({ booking_date: new Date().toISOString().slice(0, 10), booking_time: "09:00", complaint: "" });
+
+  
+
+  const requestLocation = () => {
+    if (!("geolocation" in navigator)) { toast.error("Browser tidak mendukung geolokasi"); return; }
+    navigator.geolocation.getCurrentPosition(
+      (p) => { setUserLoc({ lat: p.coords.latitude, lng: p.coords.longitude }); toast.success("Lokasi terdeteksi"); },
+      () => toast.error("Tidak bisa mengakses lokasi. Izinkan akses lokasi di browser."),
+    );
+  };
+
+  const filtered = HOSPITALS
+    .filter((h) => !search || h.name.toLowerCase().includes(search.toLowerCase()) || h.city.toLowerCase().includes(search.toLowerCase()))
+    .map((h) => ({ ...h, distance: userLoc ? haversineKm(userLoc, h) : null }))
+    .sort((a, b) => (a.distance ?? 9999) - (b.distance ?? 9999));
+
+  const { data: bookings } = useQuery({
+    queryKey: ["bookings", user?.id],
+    queryFn: async () => (await supabase.from("hospital_bookings").select("*").eq("user_id", user!.id).order("created_at", { ascending: false })).data ?? [],
+    enabled: !!user,
+  });
+
+  const submitBooking = async () => {
+    if (!bookingFor || !bf.booking_date) return;
+    await supabase.from("hospital_bookings").insert({
+      user_id: user!.id,
+      hospital_name: bookingFor.name,
+      hospital_address: bookingFor.address,
+      hospital_phone: bookingFor.phone,
+      booking_date: bf.booking_date,
+      booking_time: bf.booking_time,
+      complaint: bf.complaint,
+    });
+    toast.success(`Permintaan booking ke ${bookingFor.name} terkirim`);
+    qc.invalidateQueries({ queryKey: ["bookings"] });
+    setBookingFor(null);
+    setBf({ booking_date: new Date().toISOString().slice(0, 10), booking_time: "09:00", complaint: "" });
+  };
+
+  const mapCenter = userLoc ?? { lat: -2.5, lng: 118 };
+  const mapMarkers = filtered.slice(0, 6).map((h) => `${h.lat},${h.lng}`).join("|");
+  const mapSrc = userLoc
+    ? `https://www.openstreetmap.org/export/embed.html?bbox=${mapCenter.lng - 1},${mapCenter.lat - 1},${mapCenter.lng + 1},${mapCenter.lat + 1}&layer=mapnik&marker=${mapCenter.lat},${mapCenter.lng}`
+    : `https://www.openstreetmap.org/export/embed.html?bbox=95,-11,141,6&layer=mapnik`;
+
   return (
     <>
-      <SectionHeader title="Peta Rumah Sakit Terdekat" desc="Cari layanan medis di sekitarmu." />
-      <Card className="overflow-hidden">
-        <iframe
-          title="Peta rumah sakit"
-          src="https://www.openstreetmap.org/export/embed.html?bbox=106.6%2C-6.4%2C107.0%2C-6.1&layer=mapnik&marker=-6.2%2C106.8"
-          className="w-full h-[500px] border-0"
-        />
+      <SectionHeader title="Peta & Booking Rumah Sakit" desc="Cari, lihat detail, dan ajukan booking online." action={
+        <Button onClick={requestLocation} variant="outline"><MapPin className="h-4 w-4 mr-1" />{userLoc ? "Lokasi aktif" : "Gunakan lokasiku"}</Button>
+      } />
+
+      <Card className="overflow-hidden mb-4">
+        <iframe title="Peta rumah sakit" src={mapSrc} className="w-full h-[300px] border-0" />
       </Card>
-      <p className="text-xs text-muted-foreground mt-3">💡 Untuk pencarian rumah sakit dengan lokasi real-time, izinkan akses lokasi atau kunjungi <a href="https://www.google.com/maps/search/rumah+sakit+terdekat" target="_blank" rel="noopener" className="text-teal underline">Google Maps</a>.</p>
+
+      <Input placeholder="🔍 Cari nama RS atau kota..." value={search} onChange={(e) => setSearch(e.target.value)} className="mb-4" />
+
+      <div className="grid md:grid-cols-2 gap-4">
+        {filtered.map((h) => (
+          <Card key={h.id} className="p-5">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex-1 min-w-0">
+                <h3 className="font-semibold flex items-center gap-2"><MapPin className="h-4 w-4 text-teal shrink-0" />{h.name}</h3>
+                <p className="text-xs text-muted-foreground mt-1">{h.address}</p>
+                <div className="flex flex-wrap gap-1.5 mt-2 text-xs">
+                  <Badge variant="secondary">{h.city}</Badge>
+                  <Badge variant="outline">🕐 {h.hours}</Badge>
+                  <Badge variant="outline">📞 {h.phone}</Badge>
+                  {h.distance != null && <Badge className="bg-teal/15 text-teal border-0">{h.distance.toFixed(1)} km</Badge>}
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-2 mt-3">
+              <Button size="sm" variant="outline" asChild className="flex-1">
+                <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(h.name + " " + h.city)}`} target="_blank" rel="noopener noreferrer">Lihat di Maps</a>
+              </Button>
+              <Button size="sm" onClick={() => setBookingFor(h)} className="flex-1 gradient-hero text-white">Booking</Button>
+            </div>
+          </Card>
+        ))}
+        {filtered.length === 0 && <p className="text-muted-foreground">Tidak ada RS sesuai pencarian.</p>}
+      </div>
+
+      <Dialog open={!!bookingFor} onOpenChange={(o) => !o && setBookingFor(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Booking ke {bookingFor?.name}</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="text-xs text-muted-foreground">{bookingFor?.address}</div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5"><Label>Tanggal</Label><Input type="date" value={bf.booking_date} onChange={(e) => setBf({ ...bf, booking_date: e.target.value })} /></div>
+              <div className="space-y-1.5"><Label>Jam</Label><Input type="time" value={bf.booking_time} onChange={(e) => setBf({ ...bf, booking_time: e.target.value })} /></div>
+            </div>
+            <div className="space-y-1.5"><Label>Keluhan / tujuan</Label><Textarea rows={3} value={bf.complaint} onChange={(e) => setBf({ ...bf, complaint: e.target.value })} placeholder="Misal: kontrol rutin, demam 3 hari..." /></div>
+            <Button onClick={submitBooking} className="w-full gradient-hero text-white">Kirim Booking</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {bookings && bookings.length > 0 && (
+        <div className="mt-8">
+          <h3 className="font-semibold mb-3">Booking Saya</h3>
+          <div className="space-y-2">
+            {bookings.map((b: any) => (
+              <Card key={b.id} className="p-4 flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <p className="font-medium text-sm">{b.hospital_name}</p>
+                  <p className="text-xs text-muted-foreground">{b.booking_date} {b.booking_time} · {b.complaint || "—"}</p>
+                </div>
+                <Badge variant={b.status === "confirmed" ? "default" : "secondary"}>{b.status}</Badge>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
     </>
   );
 }

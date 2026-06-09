@@ -3,8 +3,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 /**
- * Polls reminders every minute and shows a browser notification + toast
- * when reminder_time matches the current HH:MM (per recurrence rule).
+ * Polls reminders + medications + checkups every minute.
+ * Fires a browser notification + toast when scheduled time matches HH:MM.
  */
 export function useReminderNotifications(userId: string | undefined) {
   const firedRef = useRef<Set<string>>(new Set());
@@ -12,30 +12,33 @@ export function useReminderNotifications(userId: string | undefined) {
   useEffect(() => {
     if (!userId || typeof window === "undefined") return;
 
-    // Request permission once
     if ("Notification" in window && Notification.permission === "default") {
       Notification.requestPermission().catch(() => {});
     }
 
+    const notify = (title: string, body: string) => {
+      toast.success(title, { description: body });
+      if ("Notification" in window && Notification.permission === "granted") {
+        try { new Notification(title, { body }); } catch {/* ignore */}
+      }
+    };
+
     const check = async () => {
+      const now = new Date();
+      const hhmm = now.toTimeString().slice(0, 5);
+      const todayKey = now.toISOString().slice(0, 10);
+      const dow = now.getDay();
+
+      // ----- Reminders -----
       const { data: rems } = await supabase
         .from("reminders")
         .select("*")
         .eq("user_id", userId)
         .eq("active", true);
-      if (!rems) return;
-
-      const now = new Date();
-      const hhmm = now.toTimeString().slice(0, 5); // "HH:MM"
-      const todayKey = now.toISOString().slice(0, 10);
-      const dow = now.getDay(); // 0=Sun
-
-      for (const r of rems) {
+      for (const r of rems ?? []) {
         if (!r.reminder_time) continue;
         const t = String(r.reminder_time).slice(0, 5);
         if (t !== hhmm) continue;
-
-        // Recurrence gating
         if (r.recurring === "weekly") {
           const startDow = r.created_at ? new Date(r.created_at).getDay() : dow;
           if (startDow !== dow) continue;
@@ -45,16 +48,42 @@ export function useReminderNotifications(userId: string | undefined) {
         } else if (r.recurring === "none") {
           if (r.reminder_date && r.reminder_date !== todayKey) continue;
         }
-
-        const key = `${r.id}-${todayKey}-${t}`;
+        const key = `rem-${r.id}-${todayKey}-${t}`;
         if (firedRef.current.has(key)) continue;
         firedRef.current.add(key);
+        notify(`🔔 ${r.title}`, r.notes || `Pengingat ${r.type}`);
+      }
 
-        const title = `🔔 ${r.title}`;
-        const body = r.notes || `Pengingat ${r.type}`;
-        toast.success(title, { description: body });
-        if ("Notification" in window && Notification.permission === "granted") {
-          try { new Notification(title, { body }); } catch {/* ignore */}
+      // ----- Medications -----
+      const { data: meds } = await supabase
+        .from("medications")
+        .select("*")
+        .eq("user_id", userId)
+        .eq("active", true);
+      for (const m of meds ?? []) {
+        const times: string[] = m.schedule_times ?? [];
+        for (const raw of times) {
+          const t = String(raw).slice(0, 5);
+          if (t !== hhmm) continue;
+          const key = `med-${m.id}-${todayKey}-${t}`;
+          if (firedRef.current.has(key)) continue;
+          firedRef.current.add(key);
+          notify(`💊 Saatnya minum ${m.name}`, m.dosage ? `Dosis: ${m.dosage}` : "Jangan lupa minum obatmu.");
+        }
+      }
+
+      // ----- Checkups (notif H-0, jam 08:00) -----
+      if (hhmm === "08:00") {
+        const { data: chks } = await supabase
+          .from("checkups")
+          .select("*")
+          .eq("user_id", userId)
+          .eq("checkup_date", todayKey);
+        for (const c of chks ?? []) {
+          const key = `chk-${c.id}-${todayKey}`;
+          if (firedRef.current.has(key)) continue;
+          firedRef.current.add(key);
+          notify("🩺 Jadwal Check-up hari ini", `${c.doctor || "Dokter"} · ${c.hospital || "—"}`);
         }
       }
     };
