@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
+import { AgeHealthInfo } from "@/components/AgeHealthInfo";
 import { useServerFn } from "@tanstack/react-start";
 import { analyzeInitialHealth } from "@/lib/ai.functions";
 import { toast } from "sonner";
@@ -99,6 +100,8 @@ function Onboarding() {
               <Field label="Tinggi (cm)"><Input type="number" value={f.height_cm} onChange={(e) => setF({ ...f, height_cm: +e.target.value })} /></Field>
               <Field label="Berat (kg)"><Input type="number" value={f.weight_kg} onChange={(e) => setF({ ...f, weight_kg: +e.target.value })} /></Field>
             </div>
+
+            <AgeHealthInfo age={f.age} />
 
             <Field label="Riwayat penyakit kronis"><Textarea rows={2} value={f.chronic_conditions} onChange={(e) => setF({ ...f, chronic_conditions: e.target.value })} placeholder="Diabetes, hipertensi, dll. Isi 'tidak ada' jika tidak ada." /></Field>
             <Field label="Obat yang sedang dikonsumsi"><Input value={f.current_medications} onChange={(e) => setF({ ...f, current_medications: e.target.value })} /></Field>
