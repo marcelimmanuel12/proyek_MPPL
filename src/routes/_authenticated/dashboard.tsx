@@ -622,7 +622,9 @@ function ChallengesTab() {
     const uc: any = myMap.get(c.id);
     if (!uc) return;
     const today = new Date().toISOString().slice(0, 10);
-    if (uc.last_checkin === today) { toast.info("Sudah check-in hari ini"); return; }
+    const lsKey = `checkin-${uc.id}-${today}`;
+    if (typeof window !== "undefined" && localStorage.getItem(lsKey)) { toast.info("Sudah check-in hari ini"); return; }
+    if (typeof window !== "undefined") localStorage.setItem(lsKey, "1");
     const newProgress = Math.min((uc.progress_days ?? 0) + 1, c.duration_days);
     const completed = newProgress >= c.duration_days;
     await supabase.from("user_challenges").update({ progress_days: newProgress, completed }).eq("id", uc.id);
