@@ -640,7 +640,7 @@ function MapTab() {
   const [bookingFor, setBookingFor] = useState<any>(null);
   const [bf, setBf] = useState({ booking_date: new Date().toISOString().slice(0, 10), booking_time: "09:00", complaint: "" });
 
-  const { HOSPITALS, haversineKm } = require("@/lib/hospitals-data") as typeof import("@/lib/hospitals-data");
+  
 
   const requestLocation = () => {
     if (!("geolocation" in navigator)) { toast.error("Browser tidak mendukung geolokasi"); return; }
