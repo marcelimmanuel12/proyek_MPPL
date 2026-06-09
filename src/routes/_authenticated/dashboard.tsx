@@ -551,7 +551,7 @@ function ChallengesTab() {
   const { user } = useAuth();
   const qc = useQueryClient();
   const [openId, setOpenId] = useState<string | null>(null);
-  const getLb = useServerFn(require("@/lib/challenges.functions").getLeaderboard);
+  const getLb = useServerFn(getLeaderboard);
 
   const { data: challenges } = useQuery({
     queryKey: ["challenges"],
