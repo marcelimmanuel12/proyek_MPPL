@@ -631,17 +631,126 @@ function ForumTab() {
 
 // ============== MAP ==============
 function MapTab() {
+  const { user } = useAuth();
+  const qc = useQueryClient();
+  const [search, setSearch] = useState("");
+  const [userLoc, setUserLoc] = useState<{ lat: number; lng: number } | null>(null);
+  const [bookingFor, setBookingFor] = useState<any>(null);
+  const [bf, setBf] = useState({ booking_date: new Date().toISOString().slice(0, 10), booking_time: "09:00", complaint: "" });
+
+  const { HOSPITALS, haversineKm } = require("@/lib/hospitals-data") as typeof import("@/lib/hospitals-data");
+
+  const requestLocation = () => {
+    if (!("geolocation" in navigator)) { toast.error("Browser tidak mendukung geolokasi"); return; }
+    navigator.geolocation.getCurrentPosition(
+      (p) => { setUserLoc({ lat: p.coords.latitude, lng: p.coords.longitude }); toast.success("Lokasi terdeteksi"); },
+      () => toast.error("Tidak bisa mengakses lokasi. Izinkan akses lokasi di browser."),
+    );
+  };
+
+  const filtered = HOSPITALS
+    .filter((h) => !search || h.name.toLowerCase().includes(search.toLowerCase()) || h.city.toLowerCase().includes(search.toLowerCase()))
+    .map((h) => ({ ...h, distance: userLoc ? haversineKm(userLoc, h) : null }))
+    .sort((a, b) => (a.distance ?? 9999) - (b.distance ?? 9999));
+
+  const { data: bookings } = useQuery({
+    queryKey: ["bookings", user?.id],
+    queryFn: async () => (await supabase.from("hospital_bookings").select("*").eq("user_id", user!.id).order("created_at", { ascending: false })).data ?? [],
+    enabled: !!user,
+  });
+
+  const submitBooking = async () => {
+    if (!bookingFor || !bf.booking_date) return;
+    await supabase.from("hospital_bookings").insert({
+      user_id: user!.id,
+      hospital_name: bookingFor.name,
+      hospital_address: bookingFor.address,
+      hospital_phone: bookingFor.phone,
+      booking_date: bf.booking_date,
+      booking_time: bf.booking_time,
+      complaint: bf.complaint,
+    });
+    toast.success(`Permintaan booking ke ${bookingFor.name} terkirim`);
+    qc.invalidateQueries({ queryKey: ["bookings"] });
+    setBookingFor(null);
+    setBf({ booking_date: new Date().toISOString().slice(0, 10), booking_time: "09:00", complaint: "" });
+  };
+
+  const mapCenter = userLoc ?? { lat: -2.5, lng: 118 };
+  const mapMarkers = filtered.slice(0, 6).map((h) => `${h.lat},${h.lng}`).join("|");
+  const mapSrc = userLoc
+    ? `https://www.openstreetmap.org/export/embed.html?bbox=${mapCenter.lng - 1},${mapCenter.lat - 1},${mapCenter.lng + 1},${mapCenter.lat + 1}&layer=mapnik&marker=${mapCenter.lat},${mapCenter.lng}`
+    : `https://www.openstreetmap.org/export/embed.html?bbox=95,-11,141,6&layer=mapnik`;
+
   return (
     <>
-      <SectionHeader title="Peta Rumah Sakit Terdekat" desc="Cari layanan medis di sekitarmu." />
-      <Card className="overflow-hidden">
-        <iframe
-          title="Peta rumah sakit"
-          src="https://www.openstreetmap.org/export/embed.html?bbox=106.6%2C-6.4%2C107.0%2C-6.1&layer=mapnik&marker=-6.2%2C106.8"
-          className="w-full h-[500px] border-0"
-        />
+      <SectionHeader title="Peta & Booking Rumah Sakit" desc="Cari, lihat detail, dan ajukan booking online." action={
+        <Button onClick={requestLocation} variant="outline"><MapPin className="h-4 w-4 mr-1" />{userLoc ? "Lokasi aktif" : "Gunakan lokasiku"}</Button>
+      } />
+
+      <Card className="overflow-hidden mb-4">
+        <iframe title="Peta rumah sakit" src={mapSrc} className="w-full h-[300px] border-0" />
       </Card>
-      <p className="text-xs text-muted-foreground mt-3">💡 Untuk pencarian rumah sakit dengan lokasi real-time, izinkan akses lokasi atau kunjungi <a href="https://www.google.com/maps/search/rumah+sakit+terdekat" target="_blank" rel="noopener" className="text-teal underline">Google Maps</a>.</p>
+
+      <Input placeholder="🔍 Cari nama RS atau kota..." value={search} onChange={(e) => setSearch(e.target.value)} className="mb-4" />
+
+      <div className="grid md:grid-cols-2 gap-4">
+        {filtered.map((h) => (
+          <Card key={h.id} className="p-5">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex-1 min-w-0">
+                <h3 className="font-semibold flex items-center gap-2"><MapPin className="h-4 w-4 text-teal shrink-0" />{h.name}</h3>
+                <p className="text-xs text-muted-foreground mt-1">{h.address}</p>
+                <div className="flex flex-wrap gap-1.5 mt-2 text-xs">
+                  <Badge variant="secondary">{h.city}</Badge>
+                  <Badge variant="outline">🕐 {h.hours}</Badge>
+                  <Badge variant="outline">📞 {h.phone}</Badge>
+                  {h.distance != null && <Badge className="bg-teal/15 text-teal border-0">{h.distance.toFixed(1)} km</Badge>}
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-2 mt-3">
+              <Button size="sm" variant="outline" asChild className="flex-1">
+                <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(h.name + " " + h.city)}`} target="_blank" rel="noopener noreferrer">Lihat di Maps</a>
+              </Button>
+              <Button size="sm" onClick={() => setBookingFor(h)} className="flex-1 gradient-hero text-white">Booking</Button>
+            </div>
+          </Card>
+        ))}
+        {filtered.length === 0 && <p className="text-muted-foreground">Tidak ada RS sesuai pencarian.</p>}
+      </div>
+
+      <Dialog open={!!bookingFor} onOpenChange={(o) => !o && setBookingFor(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Booking ke {bookingFor?.name}</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="text-xs text-muted-foreground">{bookingFor?.address}</div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5"><Label>Tanggal</Label><Input type="date" value={bf.booking_date} onChange={(e) => setBf({ ...bf, booking_date: e.target.value })} /></div>
+              <div className="space-y-1.5"><Label>Jam</Label><Input type="time" value={bf.booking_time} onChange={(e) => setBf({ ...bf, booking_time: e.target.value })} /></div>
+            </div>
+            <div className="space-y-1.5"><Label>Keluhan / tujuan</Label><Textarea rows={3} value={bf.complaint} onChange={(e) => setBf({ ...bf, complaint: e.target.value })} placeholder="Misal: kontrol rutin, demam 3 hari..." /></div>
+            <Button onClick={submitBooking} className="w-full gradient-hero text-white">Kirim Booking</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {bookings && bookings.length > 0 && (
+        <div className="mt-8">
+          <h3 className="font-semibold mb-3">Booking Saya</h3>
+          <div className="space-y-2">
+            {bookings.map((b: any) => (
+              <Card key={b.id} className="p-4 flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <p className="font-medium text-sm">{b.hospital_name}</p>
+                  <p className="text-xs text-muted-foreground">{b.booking_date} {b.booking_time} · {b.complaint || "—"}</p>
+                </div>
+                <Badge variant={b.status === "confirmed" ? "default" : "secondary"}>{b.status}</Badge>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
     </>
   );
 }
