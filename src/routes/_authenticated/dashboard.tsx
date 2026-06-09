@@ -234,51 +234,83 @@ function HistoryTab() {
 }
 
 // ============== MEDICATIONS ==============
+type MedForm = { name: string; dosage: string; times_per_day: number; schedule_times: string; notes: string };
+const EMPTY_MED: MedForm = { name: "", dosage: "", times_per_day: 1, schedule_times: "08:00", notes: "" };
+
 function MedsTab() {
   const { user } = useAuth();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
-  const [f, setF] = useState({ name: "", dosage: "", times_per_day: 1, schedule_times: "08:00", notes: "" });
+  const [editId, setEditId] = useState<string | null>(null);
+  const [f, setF] = useState<MedForm>(EMPTY_MED);
   const { data: meds } = useQuery({
     queryKey: ["meds", user?.id],
     queryFn: async () => (await supabase.from("medications").select("*").eq("user_id", user!.id).order("created_at", { ascending: false })).data ?? [],
     enabled: !!user,
   });
-  const add = async () => {
-    await supabase.from("medications").insert({
-      user_id: user!.id, name: f.name, dosage: f.dosage, times_per_day: f.times_per_day,
-      schedule_times: f.schedule_times.split(",").map((s) => s.trim()), notes: f.notes,
-    });
-    toast.success("Obat ditambahkan");
+
+  const openNew = () => { setEditId(null); setF(EMPTY_MED); setOpen(true); };
+  const openEdit = (m: any) => {
+    setEditId(m.id);
+    setF({ name: m.name, dosage: m.dosage ?? "", times_per_day: m.times_per_day ?? 1, schedule_times: (m.schedule_times ?? []).join(","), notes: m.notes ?? "" });
+    setOpen(true);
+  };
+
+  const save = async () => {
+    if (!f.name.trim()) { toast.error("Nama obat wajib diisi"); return; }
+    const payload = {
+      name: f.name, dosage: f.dosage, times_per_day: f.times_per_day,
+      schedule_times: f.schedule_times.split(",").map((s) => s.trim()).filter(Boolean),
+      notes: f.notes,
+    };
+    if (editId) {
+      await supabase.from("medications").update(payload).eq("id", editId);
+      toast.success("Obat diperbarui");
+    } else {
+      await supabase.from("medications").insert({ ...payload, user_id: user!.id });
+      toast.success("Obat ditambahkan");
+    }
     qc.invalidateQueries({ queryKey: ["meds"] });
     setOpen(false);
-    setF({ name: "", dosage: "", times_per_day: 1, schedule_times: "08:00", notes: "" });
   };
+
+  const del = async (id: string) => {
+    if (!confirm("Hapus obat ini?")) return;
+    await supabase.from("medications").delete().eq("id", id);
+    toast.success("Obat dihapus");
+    qc.invalidateQueries({ queryKey: ["meds"] });
+  };
+
+  const toggle = async (m: any) => {
+    await supabase.from("medications").update({ active: !m.active }).eq("id", m.id);
+    qc.invalidateQueries({ queryKey: ["meds"] });
+  };
+
   return (
     <>
       <SectionHeader title="Jadwal Obat" desc="Pengingat minum obat harian." action={
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild><Button className="gradient-hero text-white"><Plus className="h-4 w-4 mr-1" /> Tambah</Button></DialogTrigger>
-          <DialogContent>
-            <DialogHeader><DialogTitle>Tambah Obat</DialogTitle></DialogHeader>
-            <div className="space-y-3">
-              <div className="space-y-1.5"><Label>Nama obat</Label><Input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></div>
-              <div className="space-y-1.5"><Label>Dosis</Label><Input value={f.dosage} onChange={(e) => setF({ ...f, dosage: e.target.value })} placeholder="500mg, 1 tablet..." /></div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5"><Label>Frekuensi/hari</Label><Input type="number" min={1} value={f.times_per_day} onChange={(e) => setF({ ...f, times_per_day: +e.target.value })} /></div>
-                <div className="space-y-1.5"><Label>Jam (pisah koma)</Label><Input value={f.schedule_times} onChange={(e) => setF({ ...f, schedule_times: e.target.value })} placeholder="08:00,14:00,20:00" /></div>
-              </div>
-              <div className="space-y-1.5"><Label>Catatan</Label><Textarea value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} /></div>
-              <Button onClick={add} className="w-full gradient-hero text-white">Simpan</Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+        <Button onClick={openNew} className="gradient-hero text-white"><Plus className="h-4 w-4 mr-1" /> Tambah</Button>
       } />
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>{editId ? "Edit Obat" : "Tambah Obat"}</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5"><Label>Nama obat</Label><Input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></div>
+            <div className="space-y-1.5"><Label>Dosis</Label><Input value={f.dosage} onChange={(e) => setF({ ...f, dosage: e.target.value })} placeholder="500mg, 1 tablet..." /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5"><Label>Frekuensi/hari</Label><Input type="number" min={1} value={f.times_per_day} onChange={(e) => setF({ ...f, times_per_day: +e.target.value })} /></div>
+              <div className="space-y-1.5"><Label>Jam (pisah koma)</Label><Input value={f.schedule_times} onChange={(e) => setF({ ...f, schedule_times: e.target.value })} placeholder="08:00,14:00,20:00" /></div>
+            </div>
+            <div className="space-y-1.5"><Label>Catatan</Label><Textarea value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} /></div>
+            <Button onClick={save} className="w-full gradient-hero text-white">{editId ? "Update" : "Simpan"}</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
       <div className="grid md:grid-cols-2 gap-4">
         {meds?.length ? meds.map((m: any) => (
-          <Card key={m.id} className="p-5">
-            <div className="flex items-start justify-between">
-              <div>
+          <Card key={m.id} className={`p-5 ${!m.active ? "opacity-60" : ""}`}>
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex-1 min-w-0">
                 <h3 className="font-semibold flex items-center gap-2"><Pill className="h-4 w-4 text-teal" />{m.name}</h3>
                 <p className="text-sm text-muted-foreground mt-1">{m.dosage}</p>
               </div>
@@ -286,6 +318,11 @@ function MedsTab() {
             </div>
             <div className="mt-3 flex gap-1.5 flex-wrap">{(m.schedule_times ?? []).map((t: string) => <Badge key={t} className="bg-teal/10 text-teal hover:bg-teal/20 border-0">{t}</Badge>)}</div>
             {m.notes && <p className="text-xs text-muted-foreground mt-3">{m.notes}</p>}
+            <div className="flex gap-1 mt-3 justify-end">
+              <Button size="icon" variant="ghost" onClick={() => toggle(m)} title={m.active ? "Nonaktifkan" : "Aktifkan"}><Bell className={`h-4 w-4 ${m.active ? "text-teal" : "text-muted-foreground"}`} /></Button>
+              <Button size="icon" variant="ghost" onClick={() => openEdit(m)}><Pencil className="h-4 w-4" /></Button>
+              <Button size="icon" variant="ghost" onClick={() => del(m.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+            </div>
           </Card>
         )) : <p className="text-muted-foreground">Belum ada obat. Klik "Tambah".</p>}
       </div>
