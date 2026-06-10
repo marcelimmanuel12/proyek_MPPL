@@ -455,46 +455,91 @@ function RemindersTab() {
 }
 
 // ============== CHECKUPS ==============
+type CheckupForm = { checkup_date: string; doctor: string; hospital: string; diagnosis: string; notes: string };
+const emptyCheckup = (): CheckupForm => ({ checkup_date: new Date().toISOString().slice(0, 10), doctor: "", hospital: "", diagnosis: "", notes: "" });
+
 function CheckupsTab() {
   const { user } = useAuth();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
-  const [f, setF] = useState({ checkup_date: new Date().toISOString().slice(0, 10), doctor: "", hospital: "", diagnosis: "", notes: "" });
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [f, setF] = useState<CheckupForm>(emptyCheckup());
   const { data: chk } = useQuery({
     queryKey: ["chk", user?.id],
     queryFn: async () => (await supabase.from("checkups").select("*").eq("user_id", user!.id).order("checkup_date", { ascending: false })).data ?? [],
     enabled: !!user,
   });
-  const add = async () => { await supabase.from("checkups").insert({ ...f, user_id: user!.id }); toast.success("Tersimpan"); qc.invalidateQueries({ queryKey: ["chk"] }); setOpen(false); };
+
+  const openNew = () => { setEditingId(null); setF(emptyCheckup()); setOpen(true); };
+  const openEdit = (c: any) => {
+    setEditingId(c.id);
+    setF({ checkup_date: c.checkup_date ?? emptyCheckup().checkup_date, doctor: c.doctor ?? "", hospital: c.hospital ?? "", diagnosis: c.diagnosis ?? "", notes: c.notes ?? "" });
+    setOpen(true);
+  };
+  const save = async () => {
+    if (editingId) {
+      const { error } = await supabase.from("checkups").update(f).eq("id", editingId);
+      if (error) return toast.error(error.message);
+      toast.success("Check-up diperbarui");
+    } else {
+      const { error } = await supabase.from("checkups").insert({ ...f, user_id: user!.id });
+      if (error) return toast.error(error.message);
+      toast.success("Tersimpan — notifikasi otomatis aktif di hari H jam 08:00");
+    }
+    qc.invalidateQueries({ queryKey: ["chk"] });
+    setOpen(false);
+  };
+  const remove = async (id: string) => {
+    if (!confirm("Hapus catatan check-up ini?")) return;
+    const { error } = await supabase.from("checkups").delete().eq("id", id);
+    if (error) return toast.error(error.message);
+    toast.success("Dihapus");
+    qc.invalidateQueries({ queryKey: ["chk"] });
+  };
+
+  const todayKey = new Date().toISOString().slice(0, 10);
+
   return (
     <>
-      <SectionHeader title="Riwayat Check-up" action={
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild><Button className="gradient-hero text-white"><Plus className="h-4 w-4 mr-1" /> Tambah</Button></DialogTrigger>
-          <DialogContent>
-            <DialogHeader><DialogTitle>Catat Check-up</DialogTitle></DialogHeader>
-            <div className="space-y-3">
-              <div className="space-y-1.5"><Label>Tanggal</Label><Input type="date" value={f.checkup_date} onChange={(e) => setF({ ...f, checkup_date: e.target.value })} /></div>
-              <div className="space-y-1.5"><Label>Dokter</Label><Input value={f.doctor} onChange={(e) => setF({ ...f, doctor: e.target.value })} /></div>
-              <div className="space-y-1.5"><Label>Rumah Sakit / Klinik</Label><Input value={f.hospital} onChange={(e) => setF({ ...f, hospital: e.target.value })} /></div>
-              <div className="space-y-1.5"><Label>Diagnosis</Label><Input value={f.diagnosis} onChange={(e) => setF({ ...f, diagnosis: e.target.value })} /></div>
-              <div className="space-y-1.5"><Label>Catatan</Label><Textarea value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} /></div>
-              <Button onClick={add} className="w-full gradient-hero text-white">Simpan</Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+      <SectionHeader title="Riwayat Check-up" desc="Notifikasi otomatis dikirim jam 08:00 di tanggal check-up." action={
+        <Button onClick={openNew} className="gradient-hero text-white"><Plus className="h-4 w-4 mr-1" /> Tambah</Button>
       } />
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>{editingId ? "Edit Check-up" : "Catat Check-up"}</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5"><Label>Tanggal</Label><Input type="date" value={f.checkup_date} onChange={(e) => setF({ ...f, checkup_date: e.target.value })} /></div>
+            <div className="space-y-1.5"><Label>Dokter</Label><Input value={f.doctor} onChange={(e) => setF({ ...f, doctor: e.target.value })} /></div>
+            <div className="space-y-1.5"><Label>Rumah Sakit / Klinik</Label><Input value={f.hospital} onChange={(e) => setF({ ...f, hospital: e.target.value })} /></div>
+            <div className="space-y-1.5"><Label>Diagnosis</Label><Input value={f.diagnosis} onChange={(e) => setF({ ...f, diagnosis: e.target.value })} /></div>
+            <div className="space-y-1.5"><Label>Catatan</Label><Textarea value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} /></div>
+            <Button onClick={save} className="w-full gradient-hero text-white">{editingId ? "Update" : "Simpan"}</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
       <div className="space-y-3">
-        {chk?.length ? chk.map((c: any) => (
-          <Card key={c.id} className="p-5">
-            <div className="flex justify-between">
-              <h3 className="font-semibold">{c.diagnosis || "Check-up rutin"}</h3>
-              <span className="text-sm text-muted-foreground">{c.checkup_date}</span>
-            </div>
-            <p className="text-sm text-muted-foreground mt-1">{c.doctor} · {c.hospital}</p>
-            {c.notes && <p className="text-sm mt-2">{c.notes}</p>}
-          </Card>
-        )) : <p className="text-muted-foreground">Belum ada catatan check-up.</p>}
+        {chk?.length ? chk.map((c: any) => {
+          const upcoming = c.checkup_date >= todayKey;
+          return (
+            <Card key={c.id} className="p-5">
+              <div className="flex justify-between items-start gap-3">
+                <div className="min-w-0">
+                  <h3 className="font-semibold">{c.diagnosis || "Check-up rutin"}</h3>
+                  <p className="text-sm text-muted-foreground mt-1">{c.doctor || "—"} · {c.hospital || "—"}</p>
+                  {c.notes && <p className="text-sm mt-2">{c.notes}</p>}
+                  {upcoming && <span className="inline-block mt-2 text-xs px-2 py-0.5 rounded-full bg-teal/10 text-teal">🔔 Notif aktif · 08:00</span>}
+                </div>
+                <div className="flex flex-col items-end gap-2 shrink-0">
+                  <span className="text-sm text-muted-foreground">{c.checkup_date}</span>
+                  <div className="flex gap-1">
+                    <Button size="sm" variant="outline" onClick={() => openEdit(c)}>Edit</Button>
+                    <Button size="sm" variant="outline" onClick={() => remove(c.id)} className="text-destructive">Hapus</Button>
+                  </div>
+                </div>
+              </div>
+            </Card>
+          );
+        }) : <p className="text-muted-foreground">Belum ada catatan check-up.</p>}
       </div>
     </>
   );
