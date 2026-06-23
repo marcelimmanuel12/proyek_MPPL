@@ -1,0 +1,292 @@
+// SehatKu — Prisma Schema
+// Docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+// ─────────────────────────────────────────
+// AUTH
+// ─────────────────────────────────────────
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  profile             Profile?
+  monitoringLogs      MonitoringLog[]
+  medications         Medication[]
+  reminders           Reminder[]
+  checkups            Checkup[]
+  aiConsultations     AiConsultation[]
+  initialQuestionnaire InitialQuestionnaire?
+  forumPosts          ForumPost[]
+  forumComments       ForumComment[]
+  userChallenges      UserChallenge[]
+  userBadges          UserBadge[]
+  hospitalBookings    HospitalBooking[]
+
+  @@map("users")
+}
+
+// ─────────────────────────────────────────
+// PROFILE
+// ─────────────────────────────────────────
+
+model Profile {
+  id                  String   @id @default(cuid())
+  userId              String   @unique @map("user_id")
+  fullName            String?  @map("full_name")
+  age                 Int?
+  gender              String?
+  heightCm            Float?   @map("height_cm")
+  weightKg            Float?   @map("weight_kg")
+  bloodType           String?  @map("blood_type")
+  chronicConditions   String?  @map("chronic_conditions")
+  currentMedications  String?  @map("current_medications")
+  allergies           String?
+  emergencyContact    String?  @map("emergency_contact")
+  avatarMood          String?  @map("avatar_mood")
+  onboarded           Boolean  @default(false)
+  aiInitialAnalysis   String?  @map("ai_initial_analysis")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("profiles")
+}
+
+// ─────────────────────────────────────────
+// ONBOARDING
+// ─────────────────────────────────────────
+
+model InitialQuestionnaire {
+  id         String   @id @default(cuid())
+  userId     String   @unique @map("user_id")
+  responses  Json
+  aiAnalysis String?  @map("ai_analysis")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("initial_questionnaires")
+}
+
+// ─────────────────────────────────────────
+// MONITORING
+// ─────────────────────────────────────────
+
+model MonitoringLog {
+  id           String   @id @default(cuid())
+  userId       String   @map("user_id")
+  mood         String?
+  ateBreakfast Boolean? @default(false) @map("ate_breakfast")
+  ateLunch     Boolean? @default(false) @map("ate_lunch")
+  ateDinner    Boolean? @default(false) @map("ate_dinner")
+  exercised    Boolean? @default(false)
+  waterGlasses Int?     @default(0) @map("water_glasses")
+  sleepHours   Float?   @default(7) @map("sleep_hours")
+  symptoms     String?
+  notes        String?
+  aiFeedback   String?  @map("ai_feedback")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("monitoring_logs")
+}
+
+// ─────────────────────────────────────────
+// MEDICATIONS
+// ─────────────────────────────────────────
+
+model Medication {
+  id            String   @id @default(cuid())
+  userId        String   @map("user_id")
+  name          String
+  dosage        String?
+  timesPerDay   Int?     @default(1) @map("times_per_day")
+  scheduleTimes Json?    @map("schedule_times")
+  notes         String?
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("medications")
+}
+
+// ─────────────────────────────────────────
+// REMINDERS
+// ─────────────────────────────────────────
+
+model Reminder {
+  id           String   @id @default(cuid())
+  userId       String   @map("user_id")
+  type         String   // sleep | exercise | checkup | custom
+  title        String
+  reminderTime String?  @map("reminder_time") // HH:MM
+  reminderDate String?  @map("reminder_date") // YYYY-MM-DD
+  recurring    String?  @default("daily") // daily | weekly | monthly | none
+  notes        String?
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("reminders")
+}
+
+// ─────────────────────────────────────────
+// CHECKUPS
+// ─────────────────────────────────────────
+
+model Checkup {
+  id          String   @id @default(cuid())
+  userId      String   @map("user_id")
+  checkupDate String   @map("checkup_date") // YYYY-MM-DD
+  doctor      String?
+  hospital    String?
+  diagnosis   String?
+  notes       String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("checkups")
+}
+
+// ─────────────────────────────────────────
+// AI CONSULTATIONS
+// ─────────────────────────────────────────
+
+model AiConsultation {
+  id         String   @id @default(cuid())
+  userId     String   @map("user_id")
+  type       String   // consult | symptom | lifestyle
+  userInput  String   @map("user_input")
+  aiResponse String   @map("ai_response")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("ai_consultations")
+}
+
+// ─────────────────────────────────────────
+// FORUM
+// ─────────────────────────────────────────
+
+model ForumPost {
+  id         String   @id @default(cuid())
+  userId     String   @map("user_id")
+  authorName String?  @map("author_name")
+  title      String
+  content    String
+  category   String?  @default("umum")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user     User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  comments ForumComment[]
+
+  @@index([createdAt(sort: Desc)])
+  @@map("forum_posts")
+}
+
+model ForumComment {
+  id         String   @id @default(cuid())
+  postId     String   @map("post_id")
+  userId     String   @map("user_id")
+  authorName String?  @map("author_name")
+  content    String
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  post ForumPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([postId])
+  @@map("forum_comments")
+}
+
+// ─────────────────────────────────────────
+// CHALLENGES
+// ─────────────────────────────────────────
+
+model Challenge {
+  id           String   @id @default(cuid())
+  title        String
+  description  String?
+  category     String?
+  durationDays Int      @default(7) @map("duration_days")
+  icon         String?
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  userChallenges UserChallenge[]
+
+  @@map("challenges")
+}
+
+model UserChallenge {
+  id           String   @id @default(cuid())
+  userId       String   @map("user_id")
+  challengeId  String   @map("challenge_id")
+  progressDays Int      @default(0) @map("progress_days")
+  completed    Boolean  @default(false)
+  startedAt    DateTime @default(now()) @map("started_at")
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  challenge Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, challengeId])
+  @@index([userId])
+  @@map("user_challenges")
+}
+
+model UserBadge {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  badgeCode String   @map("badge_code")
+  label     String
+  earnedAt  DateTime @default(now()) @map("earned_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, badgeCode])
+  @@index([userId])
+  @@map("user_badges")
+}
+
+// ─────────────────────────────────────────
+// HOSPITAL BOOKINGS
+// ─────────────────────────────────────────
+
+model HospitalBooking {
+  id              String   @id @default(cuid())
+  userId          String   @map("user_id")
+  hospitalName    String   @map("hospital_name")
+  hospitalAddress String?  @map("hospital_address")
+  hospitalPhone   String?  @map("hospital_phone")
+  bookingDate     String   @map("booking_date") // YYYY-MM-DD
+  bookingTime     String?  @map("booking_time") // HH:MM
+  complaint       String?
+  status          String   @default("pending") // pending | confirmed | cancelled
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("hospital_bookings")
+}

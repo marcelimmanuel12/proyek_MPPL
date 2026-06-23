@@ -1,9 +1,8 @@
 import { useEffect, useRef } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 /**
- * Polls reminders + medications + checkups every minute.
+ * Polls reminders + medications + checkups every minute via API routes.
  * Fires a browser notification + toast when scheduled time matches HH:MM.
  */
 export function useReminderNotifications(userId: string | undefined) {
@@ -30,12 +29,9 @@ export function useReminderNotifications(userId: string | undefined) {
       const dow = now.getDay();
 
       // ----- Reminders -----
-      const { data: rems } = await supabase
-        .from("reminders")
-        .select("*")
-        .eq("user_id", userId)
-        .eq("active", true);
-      for (const r of rems ?? []) {
+      const remsRes = await fetch("/api/reminders?active=true").catch(() => null);
+      const rems = remsRes?.ok ? await remsRes.json() : [];
+      for (const r of rems) {
         if (!r.reminder_time) continue;
         const t = String(r.reminder_time).slice(0, 5);
         if (t !== hhmm) continue;
@@ -55,12 +51,9 @@ export function useReminderNotifications(userId: string | undefined) {
       }
 
       // ----- Medications -----
-      const { data: meds } = await supabase
-        .from("medications")
-        .select("*")
-        .eq("user_id", userId)
-        .eq("active", true);
-      for (const m of meds ?? []) {
+      const medsRes = await fetch("/api/medications?active=true").catch(() => null);
+      const meds = medsRes?.ok ? await medsRes.json() : [];
+      for (const m of meds) {
         const times: string[] = m.schedule_times ?? [];
         for (const raw of times) {
           const t = String(raw).slice(0, 5);
@@ -74,12 +67,9 @@ export function useReminderNotifications(userId: string | undefined) {
 
       // ----- Checkups (notif H-0, jam 08:00) -----
       if (hhmm === "08:00") {
-        const { data: chks } = await supabase
-          .from("checkups")
-          .select("*")
-          .eq("user_id", userId)
-          .eq("checkup_date", todayKey);
-        for (const c of chks ?? []) {
+        const chksRes = await fetch(`/api/checkups?date=${todayKey}`).catch(() => null);
+        const chks = chksRes?.ok ? await chksRes.json() : [];
+        for (const c of chks) {
           const key = `chk-${c.id}-${todayKey}`;
           if (firedRef.current.has(key)) continue;
           firedRef.current.add(key);
